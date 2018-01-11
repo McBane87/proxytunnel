@@ -25,6 +25,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 #include "config.h"
 #include "proxytunnel.h"
 
@@ -49,45 +50,46 @@ void cmdline_parser_print_help (void) {
 "\n"
 "Standard options:\n"
 // FIXME: "   -c, --config=FILE       Read config options from file\n"
-" -i, --inetd               Run from inetd (default: off)\n"
-" -a, --standalone=INT      Run as standalone daemon on specified port\n"
+" -i, --inetd                  Run from inetd (default: off)\n"
+" -a, --standalone=INT         Run as standalone daemon on specified port\n"
+" -A, --standalone_ip=STRING   Run as standalone daemon on specified ip\n"
 // FIXME: " -f, --nobackground        Don't for tok background in standalone mode\n"
-" -p, --proxy=STRING        Local proxy host:port combination\n"
-" -r, --remproxy=STRING     Remote proxy host:port combination (using 2 proxies)\n"
-" -d, --dest=STRING         Destination host:port combination\n"
+" -p, --proxy=STRING           Local proxy host:port combination\n"
+" -r, --remproxy=STRING        Remote proxy host:port combination (using 2 proxies)\n"
+" -d, --dest=STRING            Destination host:port combination\n"
 #ifdef USE_SSL
-" -e, --encrypt             SSL encrypt data between local proxy and destination\n"
-" -E, --encrypt-proxy       SSL encrypt data between client and local proxy\n"
-" -X, --encrypt-remproxy    SSL encrypt data between local and remote proxy\n"
-" -L                        (legacy) enforce TLSv1 connection\n"
-" -T, --no-ssl3             Do not connect using SSLv3\n"
+" -e, --encrypt                SSL encrypt data between local proxy and destination\n"
+" -E, --encrypt-proxy          SSL encrypt data between client and local proxy\n"
+" -X, --encrypt-remproxy       SSL encrypt data between local and remote proxy\n"
+" -L                           (legacy) enforce TLSv1 connection\n"
+" -T, --no-ssl3                Do not connect using SSLv3\n"
 #endif
 "\n"
 "Additional options for specific features:\n"
 #ifdef USE_SSL
-" -z, --no-check-certficate Don't verify server SSL certificate\n"
-" -C, --cacert=STRING       Path to trusted CA certificate or directory\n"
+" -z, --no-check-certficate    Don't verify server SSL certificate\n"
+" -C, --cacert=STRING          Path to trusted CA certificate or directory\n"
 #endif
-" -F, --passfile=STRING     File with credentials for proxy authentication\n"
-" -P, --proxyauth=STRING    Proxy auth credentials user:pass combination\n"
-" -R, --remproxyauth=STRING Remote proxy auth credentials user:pass combination\n"
+" -F, --passfile=STRING        File with credentials for proxy authentication\n"
+" -P, --proxyauth=STRING       Proxy auth credentials user:pass combination\n"
+" -R, --remproxyauth=STRING    Remote proxy auth credentials user:pass combination\n"
 // " -u, --user=STRING      Username for proxy authentication\n"
 // " -s, --pass=STRING      Password for proxy authentication\n"
 // " -U, --uservar=STRING   Environment variable that holds username\n"
 // " -S, --passvar=STRING   Environment variable that holds password\n"
-" -N, --ntlm                Use NTLM based authentication\n"
-" -t, --domain=STRING       NTLM domain (default: autodetect)\n"
-" -H, --header=STRING       Add additional HTTP headers to send to proxy\n"
-" -o STRING                 send custom Host Header\n"
+" -N, --ntlm                   Use NTLM based authentication\n"
+" -t, --domain=STRING          NTLM domain (default: autodetect)\n"
+" -H, --header=STRING          Add additional HTTP headers to send to proxy\n"
+" -o STRING                    send custom Host Header\n"
 #ifdef SETPROCTITLE
-" -x, --proctitle=STRING    Use a different process title\n"
+" -x, --proctitle=STRING       Use a different process title\n"
 #endif
 "\n"
 "Miscellaneous options:\n"
-" -v, --verbose             Turn on verbosity\n"
-" -q, --quiet               Suppress messages\n"
-" -h, --help                Print help and exit\n"
-" -V, --version             Print version and exit\n", PACKAGE);
+" -v, --verbose                Turn on verbosity\n"
+" -q, --quiet                  Suppress messages\n"
+" -h, --help                   Print help and exit\n"
+" -V, --version                Print version and exit\n", PACKAGE);
 
 #ifndef HAVE_GETOPT_LONG
 	printf( "\n"
@@ -107,6 +109,12 @@ static char * gengetopt_strdup (char * s) {
 		*pn = 0;
 	}
 	return n;
+}
+
+int isValidIpAddress(char *ipAddress) {
+	struct sockaddr_in sa;
+	int result = inet_pton(AF_INET, ipAddress, &(sa.sin_addr));
+	return result != 0;
 }
 
 int cmdline_parser( int argc, char * const *argv, struct gengetopt_args_info *args_info ) {
@@ -142,6 +150,7 @@ int cmdline_parser( int argc, char * const *argv, struct gengetopt_args_info *ar
 	args_info->enforcetls1_given = 0;
 	args_info->host_given = 0;
 	args_info->cacert_given = 0;
+	args_info->standalone_ip_given = 0;
 
 /* No... we can't make this a function... -- Maniac */
 #define clear_args() \
@@ -211,6 +220,7 @@ int cmdline_parser( int argc, char * const *argv, struct gengetopt_args_info *ar
 			{ "ntlm",			0, NULL, 'N' },
 			{ "inetd",			0, NULL, 'i' },
 			{ "standalone", 	1, NULL, 'a' },
+			{ "standalone_ip", 	1, NULL, 'A' },
 			{ "quiet",			0, NULL, 'q' },
 			{ "encrypt",		0, NULL, 'e' },
 			{ "encrypt-proxy",	0, NULL, 'E' },
@@ -221,9 +231,9 @@ int cmdline_parser( int argc, char * const *argv, struct gengetopt_args_info *ar
 			{ NULL,				0, NULL, 0 }
 		};
 
-		c = getopt_long (argc, argv, "hVia:u:s:t:F:p:P:r:R:d:H:x:nvNeEXqLo:TzC:", long_options, &option_index);
+		c = getopt_long (argc, argv, "hVia:A:u:s:t:F:p:P:r:R:d:H:x:nvNeEXqLo:TzC:", long_options, &option_index);
 #else
-		c = getopt( argc, argv, "hVia:u:s:t:F:p:P:r:R:d:H:x:nvNeEXqLo:TzC:" );
+		c = getopt( argc, argv, "hVia:A:u:s:t:F:p:P:r:R:d:H:x:nvNeEXqLo:TzC:" );
 #endif
 
 		if (c == -1)
@@ -266,6 +276,23 @@ int cmdline_parser( int argc, char * const *argv, struct gengetopt_args_info *ar
 				}
 				if ( ( args_info->standalone_arg = atoi( optarg ) ) < 1 ) {
 					fprintf( stderr, "%s: Illegal port value for `--standalone' (`-a')\n", PACKAGE);
+					clear_args();
+					exit(1);
+				}
+				break;
+				
+			case 'A':       /* Run as standalone daemon with IP */
+				if ( args_info->inetd_flag ) {
+					fprintf( stderr, "%s: `--standalone' (`-a') conflicts with `--inetd' (`-i')\n", PACKAGE );
+					clear_args();
+					exit(1);
+				}
+				
+				args_info->standalone_ip_given = 1;
+				args_info->standalone_ip = gengetopt_strdup (optarg);
+				
+				if (isValidIpAddress(args_info->standalone_ip) < 1) {
+					fprintf( stderr, "%s: No valid ip address for `--standalone_ip' (`-A')\n", PACKAGE);
 					clear_args();
 					exit(1);
 				}
@@ -469,6 +496,12 @@ int cmdline_parser( int argc, char * const *argv, struct gengetopt_args_info *ar
 				abort();
 		} /* switch */
 	} /* while */
+	
+	if ( args_info->standalone_arg < 1 && args_info->standalone_ip_given ) {
+		fprintf( stderr, "%s: Port needs to be specified with `--standalone' (`-a'), when using `--standalone_ip' (`-A')\n", PACKAGE);
+		clear_args();
+		exit(1);
+	}
 
 /* For Windows quiet is the default output. -- Dag */
 #ifdef CYGWIN

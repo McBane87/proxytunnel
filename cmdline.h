@@ -44,6 +44,7 @@ struct gengetopt_args_info {
 	int inetd_flag;			/* Turn on inetd (default=off). */
 	int quiet_flag;			/* Turn on quiet mode (default=off). */
 	int standalone_arg;		/* Turn on stdalone (-a) on port */
+	char *standalone_ip;		/* User stdalone (-A) on ip */
 	int encrypt_flag;		/* Turn on SSL encryption (default=off). */
 	int encryptproxy_flag;	/* Turn on client to proxy SSL encryption (def=off).*/
 	int encryptremproxy_flag;  /* Turn on local to remote proxy SSL encryption (def=off).*/
@@ -79,6 +80,7 @@ struct gengetopt_args_info {
 	int enforcetls1_given;   /* Wheter to enforce TLSv1 */
 	int host_given;         /* Wheter we override the Host Header */
 	int cacert_given;		/* Whether cacert was given */
+	int standalone_ip_given;	/* Whether standalone_ip was given */
 };
 
 int cmdline_parser( int argc, char * const *argv, struct gengetopt_args_info *args_info );

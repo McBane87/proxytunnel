@@ -183,7 +183,11 @@ void do_daemon()
 
 	memset( &sa_serv, '\0', sizeof( sa_serv ) );
 	sa_serv.sin_family = AF_INET;
-	sa_serv.sin_addr.s_addr = htonl(INADDR_ANY);
+	if ( args_info.standalone_ip_given < 1 ) {
+		sa_serv.sin_addr.s_addr = htonl(INADDR_ANY);
+	} else {
+		sa_serv.sin_addr.s_addr = inet_addr(args_info.standalone_ip);
+	}
 	sa_serv.sin_port = htons( args_info.standalone_arg );
 
 	if ( bind( listen_sd, (struct sockaddr * )&sa_serv, sizeof( struct sockaddr ) ) < 0) {
